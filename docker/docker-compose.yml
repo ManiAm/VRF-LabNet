@@ -1,0 +1,118 @@
+services:
+
+  # Disable bridge-level iptables filtering on the Docker host.
+  # When bridge-nf-call-iptables=1 (the default), bridged packets pass through
+  # the host's iptables FORWARD chain, which can drop cross-subnet traffic that
+  # R1 needs to route between VRF interfaces. This one-shot container sets the
+  # sysctl in the host's network namespace and exits immediately.
+  bridge-nf-fix:
+    image: vrf-labnet
+    network_mode: host
+    privileged: true
+    command: ["sysctl", "-w", "net.bridge.bridge-nf-call-iptables=0"]
+
+  R1:
+    image: vrf-labnet
+    container_name: R1
+    hostname: frr-r1
+    privileged: true
+    depends_on:
+      bridge-nf-fix:
+        condition: service_completed_successfully
+    cap_add:
+      - NET_ADMIN
+      - SYS_ADMIN
+    ulimits:
+      nofile:
+        soft: 100000
+        hard: 100000
+    networks:
+      br-blue1:
+        ipv4_address: 10.10.10.2
+      br-blue2:
+        ipv4_address: 10.10.20.2
+      br-red1:
+        ipv4_address: 10.20.10.2
+      br-red2:
+        ipv4_address: 10.20.20.2
+
+  Host-Blue1:
+    image: vrf-labnet
+    container_name: Host-Blue1
+    hostname: host-blue1
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    networks:
+      br-blue1:
+        ipv4_address: 10.10.10.10
+    environment:
+      - GATEWAY=10.10.10.2
+    command: ["/usr/local/bin/host-entrypoint.sh"]
+
+  Host-Blue2:
+    image: vrf-labnet
+    container_name: Host-Blue2
+    hostname: host-blue2
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    networks:
+      br-blue2:
+        ipv4_address: 10.10.20.10
+    environment:
+      - GATEWAY=10.10.20.2
+    command: ["/usr/local/bin/host-entrypoint.sh"]
+
+  Host-Red1:
+    image: vrf-labnet
+    container_name: Host-Red1
+    hostname: host-red1
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    networks:
+      br-red1:
+        ipv4_address: 10.20.10.10
+    environment:
+      - GATEWAY=10.20.10.2
+    command: ["/usr/local/bin/host-entrypoint.sh"]
+
+  Host-Red2:
+    image: vrf-labnet
+    container_name: Host-Red2
+    hostname: host-red2
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    networks:
+      br-red2:
+        ipv4_address: 10.20.20.10
+    environment:
+      - GATEWAY=10.20.20.2
+    command: ["/usr/local/bin/host-entrypoint.sh"]
+
+networks:
+  br-blue1:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.10.10.0/24
+
+  br-blue2:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.10.20.0/24
+
+  br-red1:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.20.10.0/24
+
+  br-red2:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.20.20.0/24
